@@ -1,0 +1,28 @@
+---
+- name: Import setup-vars.yml
+  ansible.builtin.import_tasks: setup-vars.yml
+  tags: always
+
+- name: Import install.yml
+  when: patroni_install | d(true)
+  ansible.builtin.import_tasks: install.yml
+  tags:
+    - install
+    - installation
+
+- name: Import configure.yml
+  when: patroni_configure | d(true)
+  ansible.builtin.import_tasks: configure.yml
+  tags:
+    - config
+    - configure
+    - configuration
+
+- name: Import install_dnsmasq.yml
+  when: patroni_setup_dnsmasq
+  ansible.builtin.import_tasks: install_dnsmasq.yml
+  tags: dnsmasq
+
+- name: Import prepare_for_pg_role.yml
+  ansible.builtin.import_tasks: prepare_for_pg_role.yml
+  tags: always

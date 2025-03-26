@@ -1,0 +1,15 @@
+---
+- name: Query patroni to determine current host role in the cluster
+  ansible.builtin.uri:
+    url: "http://{{ _patroni_restapi_hostwport }}/patroni"
+    method: GET
+    return_content: true
+  retries: 5
+  delay: 20
+  check_mode: false
+  until: _patroni_reg is succeeded and _patroni_reg.json.role is defined and _patroni_reg.json.role != 'uninitialized'
+  register: _patroni_reg
+
+- name: Set patroni role
+  ansible.builtin.set_fact:
+    _patroni_role: "{{ _patroni_reg.json.role }}"

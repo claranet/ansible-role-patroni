@@ -1,0 +1,179 @@
+---
+- name: Disable postgresql service
+  ansible.builtin.systemd_service:
+    name: "{{ _patroni_postgresql_daemon }}"
+    enabled: false
+
+- name: Create patroni config directory
+  when: patroni_install_from_pip
+  ansible.builtin.file:
+    path: "{{ patroni_config_dir }}"
+    state: directory
+    owner: "{{ patroni_system_user }}"
+    group: "{{ patroni_system_group }}"
+    mode: "0750"
+
+- name: Create patroni log directory
+  when: patroni_log_destination | d('stderr', true) != 'stderr'
+  ansible.builtin.file:
+    path: "{{ patroni_log_dir }}"
+    state: directory
+    owner: "{{ patroni_system_user }}"
+    group: "{{ patroni_system_group }}"
+    mode: "0750"
+
+- name: Prepare callback scripts
+  loop: "{{ patroni_postgresql_callbacks }}"
+  when: not( (item.script is none) or (item.script | trim | length == 0) )
+  ansible.builtin.copy:
+    src: "{{ patroni_postgresql_callbacks_dir }}/{{ item.event }}"
+    dest: "{{ item.script }}"
+    owner: "{{ patroni_system_user }}"
+    group: "{{ patroni_system_group }}"
+    mode: "0750"
+    backup: "{{ patroni_backup_on_copy }}"
+
+- name: Create patroni unit file
+  when: patroni_install_from_pip
+  ansible.builtin.template:
+    src: etc/systemd/system/patroni.service.j2
+    dest: /etc/systemd/system/patroni.service
+    owner: root
+    group: root
+    mode: "0644"
+
+- name: Create profile.sh
+  when: patroni_configure_profile
+  ansible.builtin.template:
+    src: etc/profile.d/patroni.sh.j2
+    dest: /etc/profile.d/patroni.sh
+    owner: "root"
+    group: "root"
+    mode: "0444"
+
+# https://patroni.readthedocs.io/en/latest/replica_bootstrap.html#replica-imaging-and-bootstrap
+- name: Check cluster's bootstrap state
+  run_once: true
+  block:
+    - name: Retrieve cluster status
+      ansible.builtin.uri:
+        url: "http://{{ _patroni_restapi_hostwport }}/cluster"
+        method: GET
+        return_content: true
+      ignore_errors: true
+      check_mode: false
+      register: _patroni_api
+
+    - name: Debug current patroni leader server host
+      when: _patroni_api is not failed
+      ansible.builtin.debug:
+        msg: "{{ _patroni_api.json.members
+          | selectattr('role', 'eq', 'leader')
+          | map(attribute='name')
+          | join('') }}"
+
+    # If bootstrapped there should there should be at the very least one node that is the leader
+    - name: Update _patroni_bootstrapped fact
+      when: _patroni_api is not failed
+      ansible.builtin.set_fact:
+        _patroni_bootstrapped: "{{ _patroni_api.json.members
+          | selectattr('role', 'eq', 'leader')
+          | map(attribute='name')
+          | join('')
+          | length > 0 }}"
+
+- name: Refine postgresql dcs params
+  when: patroni_refine_dcs_postgresql_params
+  block:
+    - name: Extract dcs specific PostgreSQL params
+      no_log: "{{ patroni_no_log }}"
+      ansible.builtin.set_fact:
+        patroni_dcs_postgresql_parameters: "{{ (patroni_postgresql_parameters + patroni_dcs_postgresql_parameters)
+          | selectattr('option', 'in', _patroni_pg_dcs_only_param_names_all)
+          | sort(attribute='option')
+          }}"
+
+    - name: Remove dcs only PostgreSQL params from patroni_postgresql_parameters
+      no_log: "{{ patroni_no_log }}"
+      ansible.builtin.set_fact:
+        patroni_postgresql_parameters: "{{ patroni_postgresql_parameters | rejectattr('option', 'in', _patroni_pg_dcs_only_param_names_all) }}"
+
+    - name: Build DCS specific PostgreSQL params' hash
+      ansible.builtin.set_fact:
+        _patroni_postgresql_dcs_only_hash: "{{ patroni_dcs_postgresql_parameters
+          | items2dict(key_name='option', value_name='value')
+          | to_json(sort_keys=True)
+          | hash() }}"
+
+    # If same params are configured then their sets hash should contain a single element
+    - name: Ensure configured dcs specific params are the same accross all nodes
+      run_once: true
+      ansible.builtin.set_fact:
+        _patroni_postgresql_dcs_only_consistent: "{{ groups[patroni_group_name]
+          | map('extract', hostvars, '_patroni_postgresql_dcs_only_hash')
+          | unique
+          | length == 1
+          }}"
+
+    - name: Assert that PostgreSQL dcs only params are consistent accross all hosts
+      run_once: true
+      ansible.builtin.assert:
+        that: _patroni_postgresql_dcs_only_consistent
+        fail_msg: |
+          IT SEEMS THAT SOME POSTGRESQL PARAMETERS THAT SHOULD BE THE SAME ACCROSS ALL
+          NODES ARE NOT CONFIGURED THAT WAY.
+          CONFIGURED VALUES DONT SEEM TO HOLD THE SAME VALUE ACCROSS ALL NODES:
+          {{ dict(groups[patroni_group_name] | zip(params)) | to_json(indent=2) }}
+      vars:
+        # Build a dict of all the dcs params per inventory node
+        params: "{{ groups[patroni_group_name] | map('extract', hostvars, 'patroni_dcs_postgresql_parameters') }}"
+
+# Use template to build the dcs object used in the bootstrap and in later dcs updates
+- name: Build dcs specific params object
+  no_log: "{{ patroni_no_log }}"
+  ansible.builtin.set_fact:
+    _patroni_dcs_obj: "{{ lookup('ansible.builtin.template', './patroni_dcs.yml.j2') | from_yaml }}"
+
+- name: Create service override directory
+  ansible.builtin.file:
+    path: /etc/systemd/system/patroni.service.d/
+    state: directory
+    owner: root
+    group: root
+    mode: "0644"
+
+- name: Create override file to use entire directory as config source to have access to the bootstrap config
+  when: not _patroni_bootstrapped
+  ansible.builtin.template:
+    src: etc/systemd/system/patroni.service.d/override.conf.j2
+    dest: /etc/systemd/system/patroni.service.d/override.conf
+    owner: root
+    group: root
+    mode: "0644"
+  notify: Reload patroni
+
+
+- name: Create patroni main configuration file
+  ansible.builtin.template:
+    src: etc/patroni/config.yml.j2
+    dest: "{{ patroni_config_dir }}/{{ patroni_config_file }}"
+    owner: "{{ patroni_system_user }}"
+    group: "{{ patroni_system_group }}"
+    mode: "0600"
+  notify:
+    - Reload patroni # service is started if not already started so its even better and should take care of the very first service start...
+
+# Bootstrap configuration file is only updated when the role determines the cluster is not yet bootstrapped
+- name: Create patroni bootstrap configuration file
+  when: not _patroni_bootstrapped
+  ansible.builtin.template:
+    src: etc/patroni/bootstrap.yml.j2
+    dest: "{{ patroni_config_dir }}/{{ patroni_bootstrap_file }}"
+    owner: "{{ patroni_system_user }}"
+    group: "{{ patroni_system_group }}"
+    mode: "0600"
+  notify:
+    - Reload patroni # service is started if not already started so its even better and should take care of the very first service start...
+
+- name: Import tasks/handle_config_changes.yml
+  ansible.builtin.import_tasks: tasks/handle_config_changes.yml

@@ -1,0 +1,53 @@
+---
+ansible_distro: "{{ ansible_distribution | lower | replace('\"', '') }}"
+ansible_distro_version: "{{ ansible_distribution_version | lower | replace('/', '_') }}"
+ansible_distro_release: "{{ ansible_distribution_release | lower }}"
+ansible_distro_major_version: "{{ ansible_distribution_major_version | lower | replace('/', '_') }}"
+
+_ansible_os_family: "{{ ansible_os_family | lower }}"
+
+# Patroni rest API helper variables
+_patroni_restapi_host: "{{ (patroni_restapi_listen | split(':') | first == '0.0.0.0') | ternary('localhost', patroni_restapi_listen | split(':') | first) }}"
+_patroni_restapi_hostwport: "{{ _patroni_restapi_host }}:{{ patroni_restapi_port }}"
+
+_patroni_python_version: 3
+_patroni_python_version_nodot: "{{ _patroni_python_version | string | split('.') | join('') }}"
+_patroni_psycopg_pip_package: psycopg2-binary
+
+_patroni_config_path: "{{ patroni_config_dir }}/{{ patroni_config_file }}"
+_patroni_bootstrap_path: "{{ patroni_config_dir }}/{{ patroni_bootstrap_file }}"
+
+# How many seconds to wait when looping to restart each patroni instance
+_patroni_reboot_loop_pause: 15
+
+# Helps identifying whether or not patroni is already bootstrapped
+_patroni_bootstrapped: false
+# Helps what kind of shared memory parameter happened
+_patroni_config_shmem_param_increase: false
+_patroni_config_shmem_param_decrease: false
+
+# patroni_postgresql_config_dir: /etc/postgresql/{{ patroni_postgresql_version }}/main
+
+# Env var used to provide the proxies to 'internet' tasks
+_postgresql_general_proxy_env: {}
+# Env var used to provide specified proxies to package manager tasks
+_postgresql_pkg_proxy_env: {}
+
+# General PG params that Patroni restricts to the DCS
+_patroni_pg_dcs_only_params_general: [max_connections, max_locks_per_transaction, max_worker_processes,
+  max_prepared_transactions, wal_level, track_commit_timestamp]
+
+# PG params restricted by Patroni because of replica failovers
+_patroni_pg_dcs_only_params_failover: [max_wal_senders, max_replication_slots, wal_keep_segments, wal_keep_size]
+
+# _patroni_other_controlled_params: [listen_addresses, port, cluster_name, hot_standby]
+
+# PG params affecting shared memory
+# if increasing value ? > restart replicas then primary. If decreasing ? restart primary then replicas
+_patroni_pg_dcs_params_shared_memory: [max_connections, max_prepared_transactions, max_locks_per_transaction,
+  max_wal_senders, max_worker_processes]
+
+# Unified list of PostgreSQL parameters whose storage, Patroni restricts to the DCS
+_patroni_pg_dcs_only_param_names_all: "{{ (_patroni_pg_dcs_only_params_general
+  + _patroni_pg_dcs_params_shared_memory
+  + _patroni_pg_dcs_only_params_failover) | unique }}"

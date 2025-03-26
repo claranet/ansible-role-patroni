@@ -1,0 +1,5 @@
+# {{ ansible_managed }}
+{{ for address in patroni_dnsmasq_listen_address | split(',') }}
+nameserver {{ address }}
+{{ endfor }}
+{{ patroni_resolvconf_extra_config }}

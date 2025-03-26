@@ -1,0 +1,57 @@
+---
+- name: Install patroni from pip
+  when: patroni_install_from_pip
+  block:
+    - name: Install patroni prerequisites packages
+      ansible.builtin.package:
+        name: "{{ patroni_pip_install_pkg_prerequisites }}"
+        update_cache: true
+      environment: "{{ _patroni_pkg_proxy_env }}"
+
+    - name: Create patroni_venv_install_dir to store virtual env
+      ansible.builtin.file:
+        path: "{{ patroni_venv_install_dir }}"
+        state: directory
+        owner: "{{ patroni_system_user }}"
+        group: "{{ patroni_system_group }}"
+        mode: "0755"
+
+    - name: Create a dedicated virtual env for patroni
+      ansible.builtin.pip:
+        name: pip
+        extra_args: --upgrade
+        virtualenv: "{{ patroni_venv_install_dir }}"
+        virtualenv_command: python{{ _patroni_python_version }} -m venv
+      when: not ansible_check_mode
+      environment: "{{ _patroni_general_proxy_env }}"
+
+    # Errors while installing this dependency on redhat system. Used the link below to provide a solution
+    # https://bobcares.com/blog/error-pg_config-executable-not-found/
+    # https://linuxhint.com/pg-config-executable-not-found/
+    - name: Install pip dependencies
+      ansible.builtin.pip:
+        name: "{{ patroni_pip_packages }}"
+        virtualenv: "{{ patroni_venv_install_dir }}"
+        extra_args: "--only-binary :{{ _patroni_psycopg_pip_package }}:"
+      environment: "{{ _patroni_general_proxy_env }}"
+
+- name: Install patroni from system packages
+  when: not patroni_install_from_pip
+  block:
+    # Run this command on redhat to enable access to consul package which prevent
+    # errors while installation of the patroni-consul package
+    - name: Install prerequisites for package based installation
+      when:
+        - ansible_os_family | lower == 'redhat'
+        - ansible_distribution_marjor_version | int in (8,9)
+      ansible.builtin.shell:
+        cmd: |
+          dnf install 'dnf-command(config-manager)' -y
+          dnf config-manager --enable pgdg-rhel{{ ansible_distribution_marjor_version }}-extras
+      register: _res
+      tags: skip_ansible_lint
+
+    - name: Install patroni from system repos
+      ansible.builtin.package:
+        name: "{{ patroni_system_packages }}"
+      environment: "{{ _patroni_pkg_proxy_env }}"

@@ -1,0 +1,18 @@
+---
+collections:
+  - name: community.general
+  - name: ansible.windows
+  - name: ansible.posix
+  - name: ansible.utils
+  - name: community.postgresql
+    version: 3.2.0
+
+roles:
+  - src: https://github.com/claranet/ansible-role-postgresql.git
+    name: claranet.postgresql
+    version: feature/patroni_integration
+    scm: git
+  - src: https://github.com/ansible-collections/ansible-consul.git
+    name: ansible-consul
+    scm: git
+    version: master

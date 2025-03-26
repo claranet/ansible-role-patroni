@@ -1,0 +1,42 @@
+---
+- name: Restart patroni-watchdog
+  ansible.builtin.systemd:
+    name: patroni-watchdog
+    state: restarted
+    daemon_reload: true
+    enabled: true
+  notify:
+    - Restart watchdog
+
+- name: Restart watchdog
+  ansible.builtin.systemd:
+    name: watchdog
+    state: restarted
+    enabled: true
+
+- name: Restart patroni
+  ansible.builtin.systemd:
+    name: patroni.service
+    state: restarted
+    daemon_reload: true
+    enabled: true
+
+- name: Restart haproxy
+  ansible.builtin.systemd:
+    name: haproxy.service
+    state: restarted
+    daemon_reload: true
+    enabled: true
+
+- name: Reload patroni
+  ansible.builtin.systemd:
+    name: patroni.service
+    state: reloaded
+    daemon_reload: true
+    enabled: true
+
+- name: Restart dnsmasq
+  ansible.builtin.systemd:
+    name: dnsmasq
+    state: restarted
+    enabled: true

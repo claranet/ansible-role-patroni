@@ -1,0 +1,14 @@
+---
+- name: Verify patroni setup
+  hosts: all
+  become: true
+
+  tasks:
+    - name: Include tasks/verify_default.yml
+      ansible.builtin.include_tasks: tasks/verify_default.yml
+
+    - name: Include tasks/verify_pg.yml
+      ansible.builtin.include_tasks: tasks/verify_pg.yml
+
+    - name: Include tasks/verify_dnsmasq.yml
+      ansible.builtin.include_tasks: tasks/verify_dnsmasq.yml

@@ -1,0 +1,6 @@
+exhibitor:
+    hosts: {{ patroni_exhibitor_hosts }}
+    port: {{ patroni_exhibitor_port }}
+{% if patroni_exhibitor_poll_interval %}
+    poll_interval: {{ patroni_exhibitor_poll_interval }}
+{% endif %}

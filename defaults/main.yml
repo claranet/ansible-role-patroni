@@ -1,0 +1,435 @@
+---
+# Ansible hostgroup gathering the cluster nodes
+patroni_group_name: ''
+# Whether or not to run patroni installation tasks
+patroni_install: true
+# Patroni being originally a python package, this role defaults to using pip to install patroni.
+# Set this variable to false to install patroni using system packages
+# With pip based installation it's much easier to support
+patroni_install_from_pip: true
+# Configured DCS
+patroni_dcs: consul
+# Patroni version to install. "" => install the latest version
+# This version is passed directory to pip. So if u want a specific version but want package based installation
+# u might need to specific an obscure version number like this: 4.0.5-1.pgdg110+1
+patroni_version: ""
+
+# Pip packages for Patroni installation
+patroni_pip_packages:
+  - setuptools
+  - psycopg2-binary
+  - patroni[{{ patroni_dcs }}]{{ '==' ~ patroni_version if patroni_version | d('', true) | length > 0 else '' }}
+# When using package based installation, add an entry for the configured dcs containing
+# the packages that are required for Patroni to access the DCS
+# Default value for patroni_dcs_packages is distribution dependent: (Check var/<os distribution>.yml)
+# patroni_dcs_packages:
+#   <dcs name>: []
+
+
+# Installation directory when installing from pip
+patroni_venv_install_dir: /opt/patroni
+# Patroni bin directory: (allows for unifying pip and system package installation)
+patroni_bin_dir: "{{ patroni_install_from_pip | ternary(patroni_venv_install_dir ~ '/bin', '/usr/bin') }}"
+# Creates a /etc/profile.d/patroni.sh to include patroni binaries in the PATH to give a package-like installation
+patroni_configure_profile: true
+# Configures a patronictl helper alias in /etc/profile.d/patroni.sh alias patronictl='patronictl -c <config.yml>'
+# This eliminates the need to always specify the configuration file while invoking patronictl which is very tedious
+patroni_configure_helper_alias: true
+
+# Installed PostgreSQL version
+patroni_postgresql_version: 16
+# PostgreSQL port
+patroni_postgresql_port: 5432
+
+# Whether or not to install PostgreSQL
+# deprecated as readme should inform user they have to explicitly install PostgreSQL before calling this role
+# patroni_install_postgresql: true
+
+# Disable logging on some tasks that might output sensitive information
+patroni_no_log: false
+
+# Enable Patroni configuration
+# Should never be false
+patroni_configure: true
+
+# Patroni configuration directory
+patroni_config_dir: /etc/patroni
+# Patroni regular configuration file within `patroni_config_dir`
+patroni_config_file: config.yml
+# Patroni configuration file within `patroni_config_dir` which contains only bootstrap data. (information under the bootstrap key)
+# After Patroni cluster is bootstrapped this file is never changed as Patroni would not take any of those changes into account anyways
+patroni_bootstrap_file: bootstrap.yml
+# PostgreSQL system user/group
+patroni_system_user: postgres
+patroni_system_group: postgres
+
+# Populates the ExecPre entry in the patroni service file: (only use when installing with pip)
+patroni_service_exec_start_pre: "/bin/mkdir -m 2750 -p /var/run/postgresql/{{ patroni_postgresql_version }}-main.pg_stat_tmp"
+
+
+# Proxy variables
+# These variables are combined into dictionnaries (_patroni_general_proxy_env and _patroni_pkg_proxy_env) to provide proxy variables to appropriate tasks.
+# HTTP and HTTPS proxy to use for general internet access on the server
+patroni_http_general_proxy: ''
+patroni_https_general_proxy: ''
+# HTTP and HTTPS proxy to use for package manager interaction (such as downloading packages, updating cache, etc) on the servers
+patroni_http_pkg_proxy: ''
+patroni_https_pkg_proxy: ''
+
+
+# Unix socket directory
+# patroni_postgresql_param_unix_socket_directories: /var/run/postgresql
+
+# Create a backup file before copying files on hosts
+patroni_backup_on_copy: true
+
+# Default replication user created during bootstrap
+patroni_replication_username: replicator
+patroni_replication_password: repuserpasswd
+# Default superuser configuration
+patroni_superuser_username: postgres
+patroni_superuser_password: supersecretpostgrespasswd
+
+
+## Regular configuration options
+
+# Controls whether or not a restart can be performed when a configuration change
+# requires a patronictl -c <config.yml> restart to be taken into account
+# DO NOT LEAVE PERMANENTLY AT TRUE to avoid potential service outages
+patroni_config_change_allow_restart: false
+# Whether or not to setup necessary facts to allow the ansible role claranet.postgresql to work properly
+# Mainly sets up connection variables and replication role allowing for using the proper node for primary
+# only related operations
+patroni_prepare_for_postgresql_role: true
+# Set the variable postgresql_conn_vars with the options required to connect to the local PostgreSQL instance
+patroni_set_pg_conn_vars: true
+# Set the variable postgresql_replication_role to allow claranet.postgresql to
+# always properly identify the primary server
+patroni_set_pg_replication_role: true
+
+
+# Allows for refining the PostgreSQL parameters that go into the DCS
+# Limiting it to only parameters that patroni restricts to being equal accross nodes
+patroni_refine_dcs_postgresql_params: true
+
+
+# https://patroni.readthedocs.io/en/latest/yaml_configuration.html#global-universal
+patroni_scope: main
+patroni_namespace: /service/
+patroni_name: "{{ inventory_hostname }}"
+
+# https://patroni.readthedocs.io/en/latest/yaml_configuration.html#log
+patroni_log_destination: stderr
+patroni_log_level: INFO
+patroni_log_format: "%(asctime)s %(levelname)s: %(message)s"
+patroni_log_dateformat: ""
+patroni_log_max_queue_size: 1000
+patroni_log_dir: /var/log/patroni
+patroni_log_file_num: 4
+patroni_log_file_size: 25000000
+patroni_log_loggers:
+  - { module: "patroni.postmaster", level: "WARNING" }
+  - { module: "urllib3", level: "DEBUG" }
+
+
+# https://patroni.readthedocs.io/en/latest/yaml_configuration.html#bootstrap-configuration
+patroni_dcs_loop_wait: 10
+patroni_dcs_ttl: 30
+patroni_dcs_retry_timeout: 10
+patroni_dcs_maximum_lag_on_failover: 1048576
+patroni_dcs_maximum_lag_on_syncnode: -1
+patroni_dcs_max_timelines_history: 0
+patroni_dcs_check_timeline: false # TODO: only found on https://patroni.readthedocs.io/en/latest/patroni_configuration.html
+patroni_dcs_primary_start_timeout: 300
+patroni_dcs_primary_stop_timeout: 0 # TODO: will be ignored
+patroni_dcs_synchronous_mode: "on" # TODO: should be on/off/quorum
+patroni_dcs_synchronous_mode_strict: false
+patroni_dcs_synchronous_node_count: 1
+patroni_dcs_failsafe_mode: false
+patroni_dcs_postgresql_use_pg_rewind: false
+patroni_dcs_postgresql_use_slots: true
+patroni_dcs_postgresql_recovery_conf: []
+#  - { option: "standby_mode",    value: "on" }
+#  - { option: "restore_command", value: "cp ../wal_archive/%f %p" }
+# PostgreSQL parameters that need be stored inside the DCS. It is advised to store this variable
+# at the hostgroup level to make sure these parameters have the same value accross all the cluster nodes
+patroni_dcs_postgresql_parameters:
+  - { option: "max_connections", value: "100" }
+  - { option: "max_locks_per_transaction", value: "64" }
+  - { option: "max_worker_processes", value: "8" }
+  - { option: "max_prepared_transactions", value: "0" }
+  - { option: "wal_level", value: "replica" }
+  - { option: "wal_log_hints", value: "on" }
+  - { option: "track_commit_timestamp", value: "off" }
+  - { option: "max_wal_senders", value: "10" }
+  - { option: "max_replication_slots", value: "10" }
+  - { option: "wal_keep_segments", value: "8" }
+
+# Prefer using patroni_postgresql_pg_hba as it has precedence over this variable
+patroni_dcs_postgresql_pg_hba: []
+#  - { type: "host", database: "all", user: "all", address: "0.0.0.0/0", method: "ident", options: "map=omicron" }
+#  - { type: "host", database: "replication", user: "{{ patroni_replication_username }}", address: "0.0.0.0/0", method: "md5" }
+# Prefer using patroni_postgresql_pg_ident as it has precedence over this variable
+patroni_dcs_postgresql_pg_ident: []
+#  - { mapname: "omicron", sysuser: "robert", pguser: "bob" }
+
+patroni_dcs_standby_cluster: []
+  # - { option: "host", value: "" }
+  # - { option: "port", value: "" }
+  # - { option: "primary_slot_name", value: "" }
+  # - { option: "create_replica_methods", value: "" }
+  # - { option: "restore_command", value: "" }
+  # - { option: "archive_cleanup_command", value: "" }
+  # - { option: "recovery_min_apply_delay", value: "" }
+
+patroni_dcs_member_slots_ttl: 30min
+
+# Permanent slots
+patroni_dcs_slots: []
+#  - { name: "permanent_physical_1", type: "physical" }
+#  - { name: "permanent_logical_1",  type: "logical", database: "foo", plugin: "pgoutput" }
+
+patroni_dcs_ignore_slots: []
+#  - { name: "ignore_1", type: "physical" }
+#  - { name: "permanent_logical_1",  type: "logical", database: "foo", plugin: "pgoutput" }
+
+
+# https://patroni.readthedocs.io/en/latest/replica_bootstrap.html#bootstrap
+patroni_bootstrap_method_name: ""
+patroni_bootstrap_method_command: ""
+patroni_bootstrap_method_keep_existing_recovery_conf: false
+patroni_bootstrap_method_no_params: false
+patroni_bootstrap_method_recovery_conf: []
+#  - { option: "standby_mode",    value: "on" }
+#  - { option: "restore_command", value: "cp ../wal_archive/%f %p" }
+
+patroni_bootstrap_initdb:
+  - { option: "encoding", value: "UTF8" }
+  - { option: "data-checksums" }
+  # - { option: "locale", value: "C.UTF8" } adding this makes the patroni service fail with the error of locale missing and adding -iculocale or sth
+
+# https://github.com/patroni/patroni/issues/878
+# TODO: deprecated: This variable doesnt seem to correspond to anything in the patroni config file.
+# The only mentions of pg_hba are inside bootstrap.dcs.postgresql.pg_hba and postgresql.hba
+patroni_bootstrap_pg_hba: []
+#  - { type: "host", database: "all", user: "all", address: "0.0.0.0/0", method: "ident", options: "map=omicron" }
+#  - { type: "host", database: "replication", user: "{{ patroni_replication_username }}", address: "0.0.0.0/0", method: "md5" }
+
+patroni_bootstrap_users:
+  - { name: "{{ patroni_superuser_username }}", password: "{{ patroni_superuser_password }}", options: [] }
+  - { name: "{{ patroni_replication_username }}", password: "{{ patroni_replication_password }}", options: ['replication'] }
+
+patroni_bootstrap_post_bootstrap: "" # TODO
+patroni_bootstrap_post_init: "" # TODO
+
+
+# https://patroni.readthedocs.io/en/latest/yaml_configuration.html#consul
+patroni_consul_host: "127.0.0.1:{{ patroni_consul_port }}"
+patroni_consul_port: 8500
+patroni_consul_url: ""
+patroni_consul_scheme: http
+patroni_consul_token: ""
+patroni_consul_verify: ""
+patroni_consul_cacert: ""
+patroni_consul_cert: ""
+patroni_consul_key: ""
+patroni_consul_dc: ""
+patroni_consul_checks: ""
+patroni_consul_register_service: true
+patroni_consul_service_check_interval: 5s
+patroni_consul_consistency: default
+
+
+# https://patroni.readthedocs.io/en/latest/yaml_configuration.html#etcd
+patroni_etcd_host: ""
+patroni_etcd_hosts: 127.0.0.1:2379
+patroni_etcd_use_proxies: false
+patroni_etcd_url: ""
+patroni_etcd_proxy: ""
+patroni_etcd_srv: ""
+patroni_etcd_protocol: http
+patroni_etcd_username: ""
+patroni_etcd_password: ""
+patroni_etcd_cacert: ""
+patroni_etcd_cert: ""
+patroni_etcd_key: ""
+
+
+# https://patroni.readthedocs.io/en/latest/yaml_configuration.html#zookeeper
+patroni_zookeeper_hosts: 127.0.0.1:2181
+patroni_zookeeper_use_ssl: false
+patroni_zookeeper_cacert: null
+patroni_zookeeper_cert: null
+patroni_zookeeper_key: null
+patroni_zookeeper_key_password: null
+patroni_zookeeper_verify: true
+patroni_zookeeper_set_acls: null
+patroni_zookeeper_auth_data: {}
+
+
+# https://patroni.readthedocs.io/en/latest/yaml_configuration.html#exhibitor
+patroni_exhibitor_hosts: ""
+patroni_exhibitor_port: ""
+patroni_exhibitor_poll_interval: null
+
+
+# https://patroni.readthedocs.io/en/latest/yaml_configuration.html#postgresql
+patroni_postgresql_authentication:
+  - { type: "superuser", username: "{{ patroni_superuser_username }}", password: "{{ patroni_superuser_password }}" }
+  - { type: "replication", username: "{{ patroni_replication_username }}", password: "{{ patroni_replication_password }}" }
+  # - { type: "rewind", username: "{{ patroni_replication_username }}", password: "{{ patroni_replication_password }}" }
+
+# The directory on the ansible controller where the callback scripts are stored
+patroni_postgresql_callbacks_dir: callbacks
+patroni_postgresql_callbacks:
+  - { event: "on_reload", script: "" }
+  - { event: "on_restart", script: "" }
+  - { event: "on_role_change", script: "" }
+  - { event: "on_start", script: "" }
+  - { event: "on_stop", script: "" }
+
+patroni_postgresql_connect_address: "{{ ansible_host }}:{{ patroni_postgresql_port }}"
+patroni_postgresql_proxy_address: null
+patroni_postgresql_create_replica_methods:
+#  - pgbackrest
+#  - wal_e
+  - basebackup
+patroni_postgresql_pgbackrest: []
+#  - { option: "command",   value: "/usr/bin/pgbackrest --stanza=main --delta restore" }
+#  - { option: "keep_data", value: "true" }
+#  - { option: "no_params", value: "true" }
+patroni_postgresql_wal_e: []
+#  - { option: "command",   value: "patroni_wale_restore" }
+#  - { option: "no_master", value: "1" }
+#  - { option: "envdir",    value: "/etc/wal_e/envdir" }
+#  - { option: "use_iam",   value: "1" }
+patroni_postgresql_basebackup: []
+#  - { option: "checkpoint", value: "fast" }
+#  - { option: "max-rate",   value: "100M" }
+#  - { option: "verbose" }
+
+patroni_postgresql_data_dir: "{{ _patroni_postgresql_data_dir }}"
+patroni_postgresql_config_dir: "{{ _patroni_postgresql_config_dir }}"
+patroni_postgresql_bin_dir: "{{ _patroni_postgresql_bin_dir }}"
+patroni_postgresql_bin_name: {}
+  # pg_ctl:
+  # initdb:
+  # pgcontroldata:
+  # pg_basebackup:
+  # postgres:
+  # pg_isready:
+  # pg_rewind:
+patroni_postgresql_listen: 0.0.0.0:{{ patroni_postgresql_port }}
+
+patroni_postgresql_use_unix_socket: true
+patroni_postgresql_use_unix_socket_repl: false
+patroni_postgresql_pgpass: "{{ _patroni_postgresql_pgpass }}"
+patroni_postgresql_recovery_conf: []
+#  - { option: "standby_mode",    value: "on" }
+#  - { option: "restore_command", value: "cp ../wal_archive/%f %p" }
+
+patroni_postgresql_custom_conf: "" # TODO
+
+patroni_postgresql_parameters:
+  - { option: "unix_socket_directories", value: "/var/run/postgresql" }
+
+patroni_postgresql_pg_hba: # []
+  - {type: "local", database: "all", user: "postgres", method: "peer"}
+  - {type: "host", database: "replication", user: "{{ patroni_replication_username }}", address: "0.0.0.0/0", method: "md5"}
+
+#  - { type: "host", database: "all", user: "all", address: "0.0.0.0/0", method: "ident", options: "map=omicron" }
+#  - { type: "host", database: "replication", user: "{{ patroni_replication_username }}", address: "0.0.0.0/0", method: "md5" }
+
+patroni_postgresql_pg_ident: []
+#  - { mapname: "omicron", sysuser: "robert", pguser: "bob" }
+
+patroni_postgresql_pg_ctl_timeout: 60
+patroni_postgresql_use_pg_rewind: null # TODO
+
+patroni_postgresql_remove_data_directory_on_rewind_failure: false
+patroni_postgresql_remove_data_directory_on_diverged_timelines: false
+
+# TODO
+patroni_postgresql_replica_method: ""
+patroni_postgresql_pre_promote: ""
+patroni_postgresql_before_stop: ""
+
+
+# https://patroni.readthedocs.io/en/latest/yaml_configuration.html#rest-api
+patroni_restapi_port: 8008
+patroni_restapi_connect_address: "{{ ansible_host }}:{{ patroni_restapi_port }}"
+patroni_restapi_listen: "0.0.0.0:{{ patroni_restapi_port }}"
+patroni_restapi_username: ""
+patroni_restapi_password: ""
+patroni_restapi_certfile: ""
+patroni_restapi_keyfile: ""
+patroni_restapi_keyfile_password: ""
+patroni_restapi_cafile: ""
+patroni_restapi_ciphers: ""
+patroni_restapi_verify_client: ""
+patroni_restapi_allowlist: [] # TODO
+patroni_restapi_allowlist_include_members: [] # TODO
+patroni_restapi_http_extra_headers: ""
+patroni_restapi_https_extra_headers: ""
+patroni_restapi_request_queue_size: 5
+
+
+# https://patroni.readthedocs.io/en/latest/yaml_configuration.html#ctl
+# Basic-auth username for accessing protected REST API endpoints. If not provided patronictl will use the value provided for REST API “username” parameter.
+patroni_ctl_authentication_username: ""
+# Basic-auth password for accessing protected REST API endpoints. If not provided patronictl will use the value provided for REST API “password” parameter.
+patroni_ctl_authentication_password: ""
+# Allow connections to REST API without verifying SSL certs.
+patroni_ctl_insecure: ""
+# Specifies the file with the CA_BUNDLE file or directory with certificates of
+# trusted CAs to use while verifying REST API SSL certs. If not provided patronictl will use the value provided for REST API “cafile” parameter.
+patroni_ctl_cacert: ""
+# Specifies the file with the client certificate in the PEM format.
+patroni_ctl_certfile: ""
+# Specifies the file with the client secret key in the PEM format.
+patroni_ctl_keyfile: ""
+# Specifies a password for decrypting the client keyfile.
+patroni_ctl_keyfile_password: ""
+
+
+# https://patroni.readthedocs.io/en/latest/yaml_configuration.html#watchdog
+patroni_watchdog_mode: 'off' # use quotes for 'off' value (off/automatic/required)
+patroni_watchdog_device: /dev/watchdog
+patroni_watchdog_safety_margin: 5
+
+
+# https://patroni.readthedocs.io/en/latest/yaml_configuration.html#tags
+patroni_tags:
+  - { name: "nofailover", value: "false" }
+  - { name: "noloadbalance", value: "false" }
+  - { name: "clonefrom", value: "false" }
+  - { name: "nosync", value: "false" }
+  - { name: "replicatefrom", value: "" }
+
+
+# Haproxy configuration, to be removed
+# Enables haproxy installation
+# patroni_setup_haproxy: false
+# # List of haproxy servers
+# patroni_haproxy_servers: []
+#   # - { name: "server1", ip: "10.0.0.1", port: "5432" }
+#   # - { name: "server2", ip: "10.0.0.2", port: "5432" }
+#   # - { name: "server3", ip: "10.0.0.3", port: "5432" }
+# patroni_haproxy_leader_listen_port: 5000
+# patroni_haproxy_replica_listen_port: 5001
+# patroni_haproxy_stats_listen_port: 7000
+
+
+patroni_setup_dnsmasq: false
+patroni_dnsmasq_listen_address: 127.0.1.53
+patroni_dnsmasq_port: 53
+patroni_dnsmasq_interface: lo
+patroni_dnsmasq_upstream_servers: []
+patroni_dnsmasq_consul_dns_servers:
+  - ip: 127.0.0.1
+    port: 8600
+    domain: consul
+patroni_dnsmasq_extra_config: ""
+
+patroni_resolvconf_unlink: false
+_patroni_resolved_service: systemd-resolved

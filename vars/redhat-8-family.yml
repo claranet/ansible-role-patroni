@@ -1,0 +1,26 @@
+---
+_patroni_postgresql_data_dir: "/var/lib/pgsql/{{ patroni_postgresql_version }}/data"
+_patroni_postgresql_config_dir: "/var/lib/pgsql/{{ patroni_postgresql_version }}/data"
+_patroni_postgresql_bin_dir: "/usr/pgsql-{{ patroni_postgresql_version }}/bin"
+_patroni_postgresql_pgpass: /var/lib/pgsql/.pgpass
+
+_patroni_postgresql_daemon: "postgresql-{{ patroni_postgresql_version }}"
+
+_patroni_python_version: 3.9
+
+patroni_pip_install_pkg_prerequisites:
+  - gcc
+  - python{{ _patroni_python_version_nodot }}-devel
+  - python{{ _patroni_python_version_nodot }}-pip
+  - python{{ _patroni_python_version_nodot }}-setuptools
+  - epel-release
+  - jq
+
+patroni_dcs_packages:
+  consul: [patroni-consul]
+  etcd: [patroni-etcd]
+
+patroni_system_packages: "{{
+    ['patroni' ~ ('-' ~ patroni_version if patroni_version | d('') | length > 0 else '')]
+    + (patroni_dcs_packages[patroni_dcs] | d([]))
+  }}"

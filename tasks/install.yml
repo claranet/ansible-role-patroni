@@ -1,0 +1,7 @@
+---
+- name: Import watchdog.yml
+  when: patroni_watchdog_mode in ('automatic', 'required')
+  ansible.builtin.import_tasks: install_watchdog.yml
+
+- name: Import install_patroni.yml
+  ansible.builtin.import_tasks: install_patroni.yml

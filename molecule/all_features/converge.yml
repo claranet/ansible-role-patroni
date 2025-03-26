@@ -1,0 +1,49 @@
+---
+- name: Converge
+  hosts: patroni_servers
+  become: true
+  gather_facts: true
+  vars_files:
+    - vars/main_pg.yml
+
+  pre_tasks:
+    - name: Update apt cache.
+      ansible.builtin.apt:
+        update_cache: true
+        cache_valid_time: 600
+      changed_when: false
+      when: ansible_os_family == 'Debian'
+
+    - name: Fix ansible-consul call when on Github actions
+      when: lookup('ansible.builtin.env', '__is_ci') | d('false', true) | bool
+      ansible.builtin.set_fact:
+        consul_install_dependencies: false
+        use_proxy: false
+
+
+  roles:
+    # Install consul dcs
+    - role: ansible-consul
+      vars:
+        consul_group_name: patroni_servers
+
+    # Install PostgreSQL packages
+    # Can be safely commented after the packages installation is done for the first time
+    - role: claranet.postgresql
+      vars:
+        postgresql_is_patroni: true
+        postgresql_version: "{{ patroni_postgresql_version }}"
+        postgresql_install: true
+        postgresql_only_install: true
+
+    # Setup Patroni cluster
+    - role: claranet.patroni
+      vars:
+        patroni_group_name: patroni_servers
+
+    # Manage postgresql objects (users, databases, privileges, etc...)
+    - role: claranet.postgresql
+      vars:
+        postgresql_is_patroni: true
+        postgresql_version: "{{ patroni_postgresql_version }}"
+        postgresql_install: false

@@ -1,0 +1,9 @@
+#jinja2: lstrip_blocks: True
+# {{ ansible_managed }}
+
+{% if patroni_install_from_pip %}
+export PATH="${PATH}:{{ patroni_bin_dir }}"
+{% endif %}
+{% if patroni_configure_helper_alias %}
+alias patronictl='patronictl -c {{ _patroni_config_path }}'
+{% endif %}

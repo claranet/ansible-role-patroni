@@ -1,0 +1,47 @@
+---
+- name: Install dnsmasq
+  ansible.builtin.package:
+    name: dnsmasq
+
+- name: Unlink /etc/resolv.conf
+  when: patroni_resolvconf_unlink
+  block:
+    - name: Get /etc/resolv.conf file stats
+      ansible.builtin.stat:
+        path: /etc/resolv.conf
+        follow: false
+      register: _patroni_resolvconf
+
+    - name: Ensure /etc/resolv.conf is not a link
+      ansible.builtin.file:
+        path: /etc/resolv.conf
+        state: absent
+      when: _patroni_resolvconf.stat.islink | d(false)
+
+- name: Create /etc/dnsmasq.conf
+  ansible.builtin.template:
+    src: etc/dnsmasq.conf.j2
+    dest: /etc/dnsmasq.conf
+    owner: root
+    group: root
+    mode: "0644"
+  notify: Restart dnsmasq
+
+- name: Ensure /etc/resolv.conf contains the dnsmasq dns server
+  ansible.builtin.lineinfile:
+    line: nameserver {{ patroni_dnsmasq_listen_address }}
+    path: /etc/resolv.conf
+    insertbefore: BOF
+    state: present
+    mode: "0644"
+    owner: root
+    group: root
+    create: true
+
+# A previous error might've crashed the service and if no change happened
+# this makes sure the service is still started
+- name: Ensure dnsmasq is started
+  ansible.builtin.systemd:
+    name: dnsmasq
+    state: started
+    enabled: true

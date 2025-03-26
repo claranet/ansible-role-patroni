@@ -1,0 +1,20 @@
+---
+- name: Ensure at least user1 is has been created
+  become_user: postgres
+  ansible.builtin.command:
+    cmd: psql -tc "select usename from pg_catalog.pg_user"
+  register: _users_res
+  changed_when: false
+  failed_when: "'user1' not in _users_res.stdout_lines | map('trim')"
+  vars:
+    ansible_ssh_pipelining: true
+
+- name: Ensure at least db1 has been created
+  become_user: postgres
+  ansible.builtin.command:
+    cmd: psql -tc "select datname from pg_database"
+  register: _db_res
+  changed_when: false
+  failed_when: "'db1' not in _db_res.stdout_lines | map('trim')"
+  vars:
+    ansible_ssh_pipelining: true

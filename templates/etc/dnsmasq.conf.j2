@@ -1,0 +1,23 @@
+#jinja2: lstrip_blocks: True
+# {{ ansible_managed }}
+interface={{ patroni_dnsmasq_interface | d('lo', true) }}
+listen-address={{ patroni_dnsmasq_listen_address | d('127.0.1.53') }}
+port={{ patroni_dnsmasq_port }}
+conf-dir={{ patroni_dnsmasq_confdir | d('/etc/dnsmasq.d') }}
+expand-hosts
+cache-size=1000
+
+# domain-needed
+# bogus-priv
+# strict-order
+# max-ttl=0
+# max-cache-ttl=0
+
+{% for srv in patroni_dnsmasq_upstream_servers %}
+server={{ srv }}
+{% endfor %}
+{% for srv in patroni_dnsmasq_consul_dns_servers %}
+server=/consul/{{srv.ip }}{{ '#' ~ srv.port if srv.port is defined else '' }}
+{% endfor %}
+
+{{ patroni_dnsmasq_extra_config }}

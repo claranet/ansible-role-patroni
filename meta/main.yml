@@ -1,0 +1,29 @@
+---
+galaxy_info:
+  description: An Ansible role which installs and configures Patroni - HA solution for PostgreSQL
+  company: claranet
+  license: MIT
+  min_ansible_version: 2.10
+  platforms:
+  - name: EL
+    versions:
+    - 8
+    - 9
+  - name: Ubuntu
+    versions:
+    - 22
+    - 24
+  - name: Debian
+    versions:
+    - 11
+    - 12
+  galaxy_tags:
+  - clustering
+  - postgresql
+  - patroni
+  - availability
+  - failover
+  namespace: claranet
+  role_name: patroni
+  author: claranet
+  dependencies: []

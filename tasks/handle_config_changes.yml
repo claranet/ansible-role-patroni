@@ -1,0 +1,173 @@
+---
+# This makes sure changes to the config file are taken into account before
+# updating the dcs params which are automatically detected and applied
+- name: Flush handlers to ensure patroni is already reloaded if required
+  ansible.builtin.meta: flush_handlers
+
+- name: Explicitly ensure patroni service is started
+  ansible.builtin.systemd:
+    name: patroni.service
+    state: started
+    enabled: true
+
+# Wait for a much longer time if the cluster is not bootstrapped yet and this is the part where
+# the cluster would be bootstrapping
+- name: Wait for patroni API to be accessible
+  when: not _patroni_bootstrapped
+  ansible.builtin.wait_for:
+    host: "{{ _patroni_restapi_host }}"
+    port: "{{ patroni_restapi_port }}"
+    timeout: 30
+
+- name: Import set_node_role.yml
+  ansible.builtin.import_tasks: set_node_role.yml
+
+- name: Set the current primary server
+  run_once: true
+  ansible.builtin.set_fact:
+    _patroni_primary: "{{ groups[patroni_group_name]
+      | map('extract', hostvars)
+      | selectattr('_patroni_role', 'eq', 'primary')
+      | map(attribute='inventory_hostname') | join(',') }}"
+
+# If no change ? the command should return immediately otherwise it will
+# wait for confirmation and hit the timeout
+- name: Update DCS params (dry-run)
+  when: ansible_check_mode
+  run_once: true
+  ansible.builtin.command:
+    cmd: "{{ patroni_bin_dir }}/patronictl -c {{ _patroni_config_path }} edit-config --apply - {{ patroni_scope }}"
+    stdin: "{{ _patroni_dcs_obj | to_yaml }}"
+  check_mode: false
+  register: _patroni_dcs_update_res_chkm
+  # timeout: 10
+  changed_when: 'not "Not changed" in _patroni_dcs_update_res_chkm.stdout'
+
+- name: Update DCS params
+  when: not ansible_check_mode
+  run_once: true
+  ansible.builtin.command:
+    cmd: "{{ patroni_bin_dir }}/patronictl -c {{ _patroni_config_path }} edit-config --force --apply - {{ patroni_scope }}"
+    stdin: "{{ _patroni_dcs_obj | to_yaml }}"
+  register: _patroni_dcs_update_res
+  changed_when: '"Configuration changed" in _patroni_dcs_update_res.stdout'
+
+
+- name: Wait for 20 seconds after DCS configuration update
+  when: _patroni_dcs_update_res is changed or _patroni_dcs_update_res_chkm is changed
+  ansible.builtin.wait_for:
+    timeout: 20
+  tags: skip_ansible_lint
+
+- name: Retrieve local patroni status to check for pending_restart
+  ansible.builtin.uri:
+    url: "http://{{ _patroni_restapi_hostwport }}/patroni"
+    method: GET
+    return_content: true
+  check_mode: false
+  register: _patroni_reg
+
+- name: Set fact if host has a pending restart
+  ansible.builtin.set_fact:
+    _patroni_has_pending_restart: "{{ _patroni_reg.json.pending_restart | d(false) }}"
+
+- name: Set fact to store the pending restart reason
+  ansible.builtin.set_fact:
+    _patroni_pending_restart_reasons_shm: "{{ _patroni_reg.json.pending_restart_reason
+      | d({})
+      | dict2items
+      | selectattr('key', 'in', _patroni_pg_dcs_params_shared_memory) }}"
+
+- name: Handle nodes requiring a restart
+  run_once: true
+  when: true
+  block:
+    - name: Retrieve params waiting pending restarts
+      ansible.builtin.set_fact:
+        # Extract all pending restart reasons into a single list, independant of the nodes
+        _pending_restart_reasons_all: "{{ groups[patroni_group_name]
+          | map('extract', hostvars, ['_patroni_reg', 'json'])
+          | selectattr('pending_restart', 'defined')
+          | selectattr('pending_restart', 'eq', true)
+          | map(attribute='pending_restart_reason')
+          }}"
+
+    - name: Summarize shared memory params whose changes are pending a restart
+      ansible.builtin.set_fact:
+        # Flatten the list of dictionnaries into a single list of {key: max_wal_senders, value: {old_value: xx, new_value: yy}}
+        _pending_restart_reasons_shm_all: "{{ groups[patroni_group_name]
+          | map('extract', hostvars)
+          | selectattr('_patroni_has_pending_restart', 'eq', true)
+          | map(attribute='_patroni_pending_restart_reasons_shm')
+          | flatten
+          | unique(attribute='key')
+          }}"
+
+    # Using 2 vars as nothing really prevents the user from increasing some params and decreasing some others
+    - name: Set fact for whether params have increased or decreased
+      ansible.builtin.set_fact:
+        _patroni_config_shmem_param_increase: "{{ _patroni_config_shmem_param_increase | d(false) or
+          (item.value.new_value | int > item.value.old_value | int) }}"
+        _patroni_config_shmem_param_decrease: "{{ _patroni_config_shmem_param_decrease | d(false) or
+          (item.value.new_value | int < item.value.old_value | int) }}"
+      loop: "{{ _pending_restart_reasons_shm_all }}"
+
+    - name: Assert that only either an increase/decrease occured in shm
+      ansible.builtin.assert:
+        that: not _patroni_config_shmem_param_increase or
+          (_patroni_config_shmem_param_increase and not _patroni_config_shmem_param_decrease)
+        fail_msg: |
+          ENSURE THAT ALL SHARED MEMORY RELATED PARAMS ({{ _patroni_pg_dcs_params_shared_memory | join(',') }})
+          THAT CHANGED HAVE EITHER INCREASED OR DECREASED NOT BOTH AT THE SAME TIME.
+          {{ _pending_restart_reasons_with_hosts }}
+      vars:
+        _pending_restart_reasons_with_hosts: "{{ dict(
+          groups[patroni_group_name]
+          | zip(groups[patroni_group_name]
+            | map('extract', hostvars, '_patroni_pending_restart_reasons_shm')
+            | map('items2dict')))
+          | to_json(indent=2)
+          }}"
+
+- name: Build list of hosts with pending restart
+  run_once: true
+  ansible.builtin.set_fact:
+    patroni_inventory_hosts_pending_restart: "{{ groups[patroni_group_name]
+      | map('extract', hostvars)
+      | selectattr('_patroni_has_pending_restart', 'eq', true)
+      | map(attribute='inventory_hostname')
+      | list
+      }}"
+
+- name: Restart patroni servers to apply configuration
+  when:
+    - patroni_config_change_allow_restart | d(false)
+    - patroni_inventory_hosts_pending_restart | length > 0
+      or _patroni_config_shmem_param_increase
+      or _patroni_config_shmem_param_decrease
+  run_once: true
+  block:
+    # Always reporting this changed as when in dry-run the actual reboot task
+    # is just skipped and does not report
+    - name: Build restart order (standys first if increase, leader first if decrease)
+      changed_when: true
+      ansible.builtin.set_fact:
+        _play_nodes_reordered: "{{ _patroni_config_shmem_param_decrease
+          | ternary([_patroni_primary]
+            + (patroni_inventory_hosts_pending_restart | difference([_patroni_primary])),
+            (patroni_inventory_hosts_pending_restart | difference([_patroni_primary])) + [_patroni_primary])
+          }}"
+
+    - name: Reboot standbys first then the primary (API)
+      delegate_to: "{{ item }}"
+      changed_when: true
+      ansible.builtin.uri:
+        url: "http://{{ _patroni_restapi_hostwport }}/restart"
+        method: POST
+        body:
+          restart_pending: true
+        body_format: json
+      register: _patroni_reg
+      loop: "{{ _play_nodes_reordered }}"
+      loop_control:
+        pause: "{{ _patroni_reboot_loop_pause }}"

@@ -1,0 +1,25 @@
+---
+- name: Import set_node_role.yml
+  ansible.builtin.import_tasks: set_node_role.yml
+
+# Map primary to primary and anything else to replica
+- name: Set postgresql_replication_role
+  when: patroni_set_pg_replication_role
+  ansible.builtin.set_fact:
+    postgresql_replication_role: "{{ (_patroni_role == 'primary') | ternary('primary', 'replica') }}"
+
+- name: Set postgresql_conn_vars
+  when: patroni_set_pg_conn_vars
+  ansible.builtin.set_fact:
+    postgresql_conn_vars:
+      login_user: "{{ patroni_system_user }}"
+      login_port: "{{ (patroni_postgresql_listen | split(':'))[1] }}"
+      login_unix_socket: "{{ ((patroni_dcs_postgresql_parameters + patroni_postgresql_parameters)
+        | selectattr('option', 'eq', 'unix_socket_directories')
+        | unique(attribute='option')
+        | first).value
+        | d('', true)
+        | split(',')
+        | first
+        | d(None, true)
+        }}"

@@ -1,0 +1,16 @@
+---
+- name: Ensure dnsmasq is enabled and running
+  ansible.builtin.systemd:
+    name: dnsmasq
+    enabled: true
+    state: started
+  check_mode: true
+  register: _dnsmasq_service_res
+  failed_when: _dnsmasq_service_res is changed
+
+- name: Ensure that master.main.service.consul is resolvable locally
+  changed_when: false
+  ansible.builtin.command:
+    cmd: dig +short master.main.service.consul
+  register: _dig_res
+  failed_when: _dig_res.stdout_lines | length == 0

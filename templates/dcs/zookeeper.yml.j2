@@ -1,0 +1,22 @@
+zookeeper:
+  hosts: {{ "%s\n" |format(patroni_zookeeper_hosts |d('127.0.0.1:2181', true)) }}
+  use_ssl: {{ patroni_zookeeper_use_ssl }}
+{% if patroni_zookeeper_cacert %}
+  cacert: {{ patroni_zookeeper_cacert }}
+{% endif %}
+{% if patroni_zookeeper_cert %}
+  cert: {{ patroni_zookeeper_cert }}
+{% endif %}
+{% if patroni_zookeeper_key %}
+  key: {{ patroni_zookeeper_key }}
+{% endif %}
+{% if patroni_zookeeper_key_password %}
+  key_password: {{ patroni_zookeeper_key_password }}
+{% endif %}
+  verify: {{ patroni_zookeeper_verify }}
+{% if patroni_zookeeper_set_acls %}
+  set_acls: {{ patroni_zookeeper_set_acls }}
+{% endif %}
+{% if patroni_zookeeper_auth_data %}
+  auth_data: {{ patroni_zookeeper_auth_data | d({}) | to_json }}
+{% endif %}

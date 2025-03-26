@@ -1,0 +1,6 @@
+#!/bin/sh
+echo RUNNNING "$0"
+python3 -m pip install -r "$(dirname "$0")/requirements.txt"
+# ansible-galaxy install --ignore-errors -r "$(dirname "$0")/requirements.yml"
+ansible-galaxy install --force -r "$(dirname "$0")/requirements.yml"
+ 

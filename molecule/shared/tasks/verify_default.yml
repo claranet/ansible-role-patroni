@@ -1,0 +1,33 @@
+---
+- name: Ensure patroni is installed
+  changed_when: false
+  ansible.builtin.command:
+    cmd: patronictl version
+  environment:
+    PATH: "{{ ansible_env.PATH }}:/opt/patroni/bin"
+
+- name: Stat patroni config file /etc/patroni/config.yml
+  ansible.builtin.stat:
+    path: /etc/patroni/config.yml
+  register: _config_res
+  failed_when: not _config_res.stat.exists
+
+- name: Ensure patroni service is enabled and running
+  ansible.builtin.systemd:
+    name: patroni
+    state: started
+    enabled: true
+  register: _patroni_service_res
+  failed_when: _patroni_service_res is changed
+  check_mode: true
+
+- name: Ensure the RESTAPI is accessible
+  ansible.builtin.wait_for:
+    host: localhost
+    port: 8008
+
+- name: Ensure the underlying postgresql is healthy
+  ansible.builtin.uri:
+    url: http://localhost:8008/health
+    method: GET
+    return_content: true

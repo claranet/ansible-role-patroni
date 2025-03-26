@@ -1,0 +1,41 @@
+---
+- name: Include os specific variables
+  ansible.builtin.include_vars: "{{ loop_vars }}"
+  loop: "{{ query('ansible.builtin.first_found', params) }}"
+  vars:
+    params:
+      files:
+        - "{{ ansible_distro | lower }}-{{ ansible_distro_version }}.yml"
+        - "{{ ansible_distro | lower }}-{{ ansible_distro_release }}.yml"
+        - "{{ ansible_distro | lower }}-{{ ansible_distro_major_version }}.yml"
+        - "{{ ansible_distro | lower }}.yml"
+        - "{{ ansible_os_family | lower }}-{{ ansible_distro_major_version }}-family.yml"
+        - "{{ ansible_os_family | lower }}-family.yml"
+        - "{{ ansible_system | lower }}.yml"
+      paths:
+        - "vars"
+      skip: true
+  loop_control:
+    loop_var: loop_vars
+
+# - name: Include OS-specific variables
+#   ansible.builtin.include_vars: "{{ ansible_os_family }}.yml"
+
+  # tags: [patroni, patroni-install, patroni-configure]
+
+
+- name: Ensure patroni_group_name is defined
+  ansible.builtin.assert:
+    that:
+      - patroni_group_name | d('') | length > 0
+      - patroni_group_name in groups
+    fail_msg: THE VARIABLE patroni_group_name IS NOT DEFINED. PUT ALL THE PATRONI NODES WITHIN AN ANSIBLE HOSTGROUP
+
+- name: "Build proxy environnement to enable/disable proxy use for general internet usage and package manager actions"
+  ansible.builtin.set_fact:
+    _patroni_general_proxy_env:
+      http_proxy: "{{ patroni_http_general_proxy | d(omit, true) }}"
+      https_proxy: "{{ patroni_https_general_proxy | d(omit, true) }}"
+    _patroni_pkg_proxy_env:
+      http_proxy: "{{ patroni_http_pkg_proxy | d(omit, true) }}"
+      https_proxy: "{{ patroni_https_pkg_proxy | d(omit, true) }}"
