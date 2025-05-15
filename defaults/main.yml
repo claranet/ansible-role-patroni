@@ -432,4 +432,5 @@ patroni_dnsmasq_consul_dns_servers:
 patroni_dnsmasq_extra_config: ""
 
 patroni_resolvconf_unlink: false
+patroni_systemd_resolved_conf_path: /etc/systemd/resolved.conf
 _patroni_resolved_service: systemd-resolved

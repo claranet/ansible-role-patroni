@@ -30,6 +30,7 @@
     #   ansible.builtin.package:
     #     name: "{{ ansible_os_family | lower == 'redhat' | ternary('bind-utils', 'dnsutils') }}"
     - name: Attempt to disable systemd-resolved
+      when: false
       failed_when: false
       ansible.builtin.systemd:
         name: systemd-resolved
