@@ -35,6 +35,12 @@
     daemon_reload: true
     enabled: true
 
+- name: Restart systemd-resolved
+  ansible.builtin.systemd:
+    name: systemd-resolved
+    state: restarted
+    enabled: true
+
 - name: Restart dnsmasq
   ansible.builtin.systemd:
     name: dnsmasq

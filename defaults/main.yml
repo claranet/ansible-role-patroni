@@ -406,30 +406,24 @@ patroni_tags:
   - { name: "nosync", value: "false" }
   - { name: "replicatefrom", value: "" }
 
-
-# Haproxy configuration, to be removed
-# Enables haproxy installation
-# patroni_setup_haproxy: false
-# # List of haproxy servers
-# patroni_haproxy_servers: []
-#   # - { name: "server1", ip: "10.0.0.1", port: "5432" }
-#   # - { name: "server2", ip: "10.0.0.2", port: "5432" }
-#   # - { name: "server3", ip: "10.0.0.3", port: "5432" }
-# patroni_haproxy_leader_listen_port: 5000
-# patroni_haproxy_replica_listen_port: 5001
-# patroni_haproxy_stats_listen_port: 7000
-
-
+# Patroni dnsmasq configuration
+# Install & configure dnsmasq
 patroni_setup_dnsmasq: false
+# Listening address for dnsmasq
 patroni_dnsmasq_listen_address: 127.0.1.53
+# Listening port for dnsmasq
 patroni_dnsmasq_port: 53
+# Listening interface
 patroni_dnsmasq_interface: lo
+# List of the upstream dns server
 patroni_dnsmasq_upstream_servers: []
+# The addresses of the built-in consul DNS servers.
+# This can be updated to specify any consul dns server
 patroni_dnsmasq_consul_dns_servers:
   - ip: 127.0.0.1
     port: 8600
     domain: consul
+# Extra dnsmasq configuration
 patroni_dnsmasq_extra_config: ""
-
-patroni_resolvconf_unlink: false
-_patroni_resolved_service: systemd-resolved
+# IP address used in the 'DNS=' setting of systemd-resolved to route DNS queries through dnsmasq
+patroni_dnsmasq_resolve_dns: "{{ patroni_dnsmasq_listen_address }}"

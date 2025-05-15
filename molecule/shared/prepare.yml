@@ -1,0 +1,113 @@
+---
+- name: Prepare localhost (only on CI)
+  hosts: localhost
+  connection: local
+
+  tasks:
+    - name: Install OS packages
+      when: lookup('ansible.builtin.env', '__is_ci') | d('false', true) | bool
+      ansible.builtin.package:
+        name: unzip
+      become: true
+
+    - name: Install netaddr dependency on controlling host
+      when: lookup('ansible.builtin.env', '__is_ci') | d('false', true) | bool
+      ansible.builtin.pip:
+        name: netaddr
+      become: false
+
+- name: Prepare all hosts
+  hosts: all
+
+  pre_tasks:
+    # - name: Install kmod
+    #   when: patroni_watchdog_mode | d('off') in ('automatic', 'required')
+    #   ansible.builtin.package:
+    #     name: kmod
+    #   timeout: 120
+
+    - name: Copy original resolvconf
+      ansible.builtin.copy:
+        src: /etc/resolv.conf
+        dest: /etc/resolv.conf.pre_molecule_run
+        mode: preserve
+        remote_src: true
+
+    - name: Debug
+      ansible.builtin.debug:
+        var: o
+      vars:
+        o:
+          ansible_os_family: "{{ ansible_os_family }}"
+          ansible_distribution: "{{ ansible_distribution }}"
+          ansible_distribution_major_version: "{{ ansible_distribution_major_version }}"
+
+    - name: Install systemd-resolved
+      ansible.builtin.package:
+        name: systemd-resolved
+        state: present
+      register: resolved_install_res
+      when: (ansible_distribution | lower == "debian" and ansible_distribution_major_version is version("12", ">=")) or
+          (ansible_distribution | lower == "ubuntu" and ansible_distribution_major_version is version("24", ">=")) or
+          (ansible_os_family | lower == "redhat" and ansible_distribution_major_version is version("9", ">="))
+
+    # Not working cause if installation is done right now the /etc/resolv.conf points to /run/systemd/resolve/stub-resolv.conf which doesnt exist yet
+    # - name: cat /etc/resolv.conf
+    #   ansible.builtin.shell:
+    #     cmd: |
+    #       cat /etc/resolv.conf && cat /run/systemd/resolve/resolv.conf
+    #   args:
+    #     executable: /bin/bash
+
+    - name: Ensure resolvconf is unmounted
+      ansible.posix.mount:
+        path: /etc/resolv.conf
+        state: unmounted
+      register: resolvconf_unmount_res
+
+    - name: Ensure systemd-resolved is stopped before hijacking resolv.conf
+      # when: resolved_install_res is skipped
+      # failed_when: false
+      ansible.builtin.systemd:
+        name: systemd-resolved
+        state: stopped
+        enabled: true
+        daemon_reload: true
+
+    - name: Restore original /etc/resolv.conf as a a regular file
+      block:
+        - name: Ensure /etc/resolv.conf doesnt exist
+          ansible.builtin.file:
+            path: /etc/resolv.conf
+            state: absent
+
+        - name: Restore original /etc/resolv.conf
+          when: true
+          ansible.builtin.copy:
+            src: /etc/resolv.conf.pre_molecule_run
+            dest: /etc/resolv.conf
+            remote_src: true
+            mode: preserve
+
+    - name: Ensure systemd-resolved is enabled and started
+      # when: resolved_install_res is skipped
+      ansible.builtin.systemd:
+        name: systemd-resolved
+        state: restarted
+        enabled: true
+        daemon_reload: true
+
+    - name: Debug /etc/resolv.conf
+      changed_when: false
+      ansible.builtin.shell:
+        cmd: |
+          cat /etc/resolv.conf && cat /run/systemd/resolve/resolv.conf
+      args:
+        executable: /bin/bash
+
+    - name: Use systemd-resolved 's resolv.conf
+      ansible.builtin.file:
+        src: /run/systemd/resolve/resolv.conf
+        dest: /etc/resolv.conf
+        state: link
+        force: true

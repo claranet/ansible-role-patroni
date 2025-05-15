@@ -10,7 +10,7 @@ platforms:
   # On "${name:-${image:-debian}", the last brace does not miss, it works like that...
   # The env var should be used when the image variable refers to a full registry path like registry.access.redhat.com/ubi8/ubi
   - &default
-    name: claranet-patroni-node1-${image:-debian}-${tag:-latest}-${scenario:-default}-${patroni_version}
+    name: claranet-patroni-node1-${name:-${image:-debian}-${tag:-latest}-${scenario:-default}
     image: ${image:-debian}:${tag:-latest}
     privileged: true
     tty: true
@@ -28,13 +28,13 @@ platforms:
       - patroni_servers
     cgroupns_mode: host
     networks:
-      - name: claranet-patroni-${image:-debian}-${tag:-latest}-${scenario:-default}-${patroni_version}
+      - name: claranet-patroni-${name:-${image:-debian}-${tag:-latest}-${scenario:-default}
 
   - <<: *default
-    name: claranet-patroni-node2-${image:-debian}-${tag:-latest}-${scenario:-default}-${patroni_version}
+    name: claranet-patroni-node2-${name:-${image:-debian}-${tag:-latest}-${scenario:-default}
 
   # - <<: *default
-  #   name: claranet-patroni-node3-${image:-debian}-${tag:-latest}-${scenario:-default}-${patroni_version}
+  #   name: claranet-patroni-node3-${name:-${image:-debian}-${tag:-latest}-${scenario:-default}-${patroni_version}
 
 provisioner:
   name: ansible
@@ -66,9 +66,9 @@ provisioner:
         patroni_postgresql_version: ${patroni_postgresql_version:-16}
 
     host_vars:
-      claranet-patroni-node1-${image:-debian}-${tag:-latest}-${scenario:-default}-${patroni_version}:
-      claranet-patroni-node2-${image:-debian}-${tag:-latest}-${scenario:-default}-${patroni_version}:
-      claranet-patroni-node3-${image:-debian}-${tag:-latest}-${scenario:-default}-${patroni_version}:
+      claranet-patroni-node1-${name:-${image:-debian}-${tag:-latest}-${scenario:-default}:
+      claranet-patroni-node2-${name:-${image:-debian}-${tag:-latest}-${scenario:-default}:
+      claranet-patroni-node3-${name:-${image:-debian}-${tag:-latest}-${scenario:-default}:
 
 
 verifier:

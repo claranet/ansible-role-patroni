@@ -16,5 +16,5 @@ ENV {{ var }} {{ value }}
 
 # https://github.com/amazonlinux/amazon-linux-2023/issues/150 explains the need for
 
-RUN if [ $(command -v apt-get) ]; then apt-get update && apt-get install -y python3 sudo bash ca-certificates iproute2 systemd wget iputils-ping nano less curl procps kmod dnsutils && apt-get clean; \
+RUN if [ $(command -v apt-get) ]; then apt-get update && apt-get install -y python3 sudo bash ca-certificates iproute2 systemd dbus wget iputils-ping nano less curl procps kmod dnsutils && apt-get clean; \
     elif [ $(command -v yum) ]; then {% if item.image.split(':')[1] == "centos8" %} sed -i 's/mirrorlist/#mirrorlist/g' /etc/yum.repos.d/CentOS-*; sed -i 's|#baseurl=http://mirror.centos.org|baseurl=http://vault.centos.org|g' /etc/yum.repos.d/CentOS-* && {% endif %} yum install -y python3 sudo bash iproute systemd initscripts wget curl kmod which bind-utils --allowerasing ; fi

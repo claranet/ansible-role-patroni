@@ -18,18 +18,18 @@
   loop_control:
     loop_var: loop_vars
 
-# - name: Include OS-specific variables
-#   ansible.builtin.include_vars: "{{ ansible_os_family }}.yml"
-
-  # tags: [patroni, patroni-install, patroni-configure]
-
-
 - name: Ensure patroni_group_name is defined
   ansible.builtin.assert:
     that:
       - patroni_group_name | d('') | length > 0
       - patroni_group_name in groups
     fail_msg: THE VARIABLE patroni_group_name IS NOT DEFINED. PUT ALL THE PATRONI NODES WITHIN AN ANSIBLE HOSTGROUP
+
+- name: Ensure patroni_dnsmasq_upstream_servers is not empty if using dnsmasq
+  when: patroni_setup_dnsmasq | bool
+  ansible.builtin.assert:
+    that: patroni_dnsmasq_upstream_servers | d([]) | length > 0
+    fail_msg: THE VARIABLE patroni_dnsmasq_upstream_servers CONTAINS NO DNS SERVERS. PUT ALL THE UPSTREAM DNS SERVERS AS A LIST WITHIN AN said variable
 
 - name: "Build proxy environnement to enable/disable proxy use for general internet usage and package manager actions"
   ansible.builtin.set_fact:

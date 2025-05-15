@@ -671,7 +671,10 @@ patroni_tags:
 ---
 _dnsmasq setup is disabled (`patroni_setup_dnsmasq: false`) by default_
 
+> :rotating_light: This is an opinionated configuration that assumes systemd-resolved is managing DNS on the host. If another service is handling DNS resolution, behavior may be unpredictable or break entirely.
+
 When using Consul as the Distributed Configuration Store (DCS), it provides a built-in DNS server that dynamically resolves `master/primary/replica` nodes in a Patroni cluster.
+To integrate this with system DNS resolution, dnsmasq is used as a lightweight local DNS forwarder.
 
 Ensure that `consul_addresses_dns` variable contains `127.0.0.1` so the Consul DNS server listens on `localhost`.
 
@@ -681,17 +684,12 @@ You can test the DNS resolution using the dig command:
 node1 $ dig @127.0.0.1 -p 8600 master.main.service.consul
 ```
 
-This opinionated setup ensures that each Patroni node can locally resolve DNS names in the format: `<master/primary/replica>.<patroni_scope>.service.consul` where `patroni_scope` defaults to the Patroni cluster name.
-
-> :rotating_light: When enabling this part, the `/etc/resolv.conf` will be made into a real file if it were a link (`patroni_resolvconf_unlink: true`) so u need to make sure 
+This setup ensures that each Patroni node can locally resolve DNS names in the format: `<master/primary/replica>.<patroni_scope>.service.consul` where `patroni_scope` defaults to the Patroni cluster name.
 
 
 ```yaml
 # Install & configure dnsmasq
 patroni_setup_dnsmasq: false
-# Whether or not to unlink the /etc/resolv.conf . This might me useful as typically
-# /etc/resolv.conf is managed by another service
-patroni_resolvconf_unlink: false
 # Listening address for dnsmasq
 patroni_dnsmasq_listen_address: 127.0.1.53
 # Listening port for dnsmasq
@@ -706,8 +704,10 @@ patroni_dnsmasq_consul_dns_servers:
   - ip: 127.0.0.1
     port: 8600
     domain: consul
-# Extra dnsmasq configuraiton
+# Extra dnsmasq configuration
 patroni_dnsmasq_extra_config: ""
+# IP address used in the 'DNS=' setting of systemd-resolved to route DNS queries through dnsmasq
+patroni_dnsmasq_resolve_dns: "{{ patroni_dnsmasq_listen_address }}"
 ```
 
 
