@@ -1,0 +1,127 @@
+---
+- name: Prepare localhost (only on CI)
+  hosts: localhost
+  connection: local
+
+  tasks:
+    - name: Install OS packages
+      when: lookup('ansible.builtin.env', '__is_ci') | d('false', true) | bool
+      ansible.builtin.package:
+        name: unzip
+      become: true
+
+    - name: Install netaddr dependency on controlling host
+      when: lookup('ansible.builtin.env', '__is_ci') | d('false', true) | bool
+      ansible.builtin.pip:
+        name: netaddr
+      become: false
+
+- name: Prepare all hosts
+  hosts: all
+
+  pre_tasks:
+    # - name: Install kmod
+    #   when: patroni_watchdog_mode | d('off') in ('automatic', 'required')
+    #   ansible.builtin.package:
+    #     name: kmod
+    #   timeout: 120
+
+    # - name: Install dig
+    #   ansible.builtin.package:
+    #     name: "{{ ansible_os_family | lower == 'redhat' | ternary('bind-utils', 'dnsutils') }}"
+
+    - name: Copy original resolvconf
+      ansible.builtin.copy:
+        src: /etc/resolv.conf
+        dest: /etc/resolv.conf.pre_molecule_run
+        mode: preserve
+        remote_src: true
+
+    - name: Ensure /etc/resolv.conf is a regular file
+      block:
+        - name: Copy original resolvconf
+          ansible.builtin.copy:
+            src: /etc/resolv.conf
+            dest: /etc/resolv.conf.pre_molecule_run
+            mode: preserve
+            remote_src: true
+
+        - name: Ensure resolvconf is unmounted
+          ansible.posix.mount:
+            path: /etc/resolv.conf
+            state: unmounted
+          register: resolvconf_unmount_res
+
+        # - name: Ensure /etc/resolv.conf doesnt exist before creating link
+        #   when: true or resolvconf_unmount_res is changed
+        #   ansible.builtin.file:
+        #     path: /etc/resolv.conf
+        #     state: absent
+
+        - name: Restore original /etc/resolv.conf
+          when: true
+          ansible.builtin.copy:
+            src: /etc/resolv.conf.pre_molecule_run
+            dest: /etc/resolv.conf
+            remote_src: true
+            mode: preserve
+
+    - name: Debug
+      ansible.builtin.debug:
+        var: o
+      vars:
+        o:
+          ansible_os_family: "{{ ansible_os_family }}"
+          ansible_distribution: "{{ ansible_distribution }}"
+          ansible_distribution_major_version: "{{ ansible_distribution_major_version }}"
+
+    - name: Install systemd-resolved
+      ansible.builtin.package:
+        name: systemd-resolved
+        state: present
+      register: resolved_install_res
+      when: (ansible_distribution | lower == "debian" and ansible_distribution_major_version is version("12", ">=")) or
+          (ansible_distribution | lower == "ubuntu" and ansible_distribution_major_version is version("24", ">=")) or
+          (ansible_distribution | lower == "redhat" and ansible_distribution_major_version is version("9", "<"))
+
+    - name: Ensure systemd-resolved is enabled and started
+      # when: resolved_install_res is skipped
+      failed_when: false
+      ansible.builtin.systemd:
+        name: systemd-resolved
+        state: started
+        enabled: true
+        daemon_reload: true
+
+    - name: Link systemd-resolved to /etc/resolv.conf
+      when: true
+      ansible.builtin.file:
+        src: /run/systemd/resolve/resolv.conf
+        dest: /etc/resolv.conf
+        state: link
+        force: true
+
+    - name: Make /etc/resolv.conf be a regular file
+      when: false
+      block:
+        - name: Copy original resolvconf
+          ansible.builtin.copy:
+            src: /etc/resolv.conf
+            dest: /etc/resolv.conf.pre_molecule_run
+            mode: preserve
+            remote_src: true
+
+        - name: Ensure resolvconf is unmounted
+          ansible.posix.mount:
+            path: /etc/resolv.conf
+            state: unmounted
+          register: resolvconf_unmount_res
+
+        - name: Restore original resolvconf
+          when: resolvconf_unmount_res is changed
+          ansible.builtin.copy:
+            src: /etc/resolv.conf.pre_molecule_run
+            dest: /etc/resolv.conf
+            remote_src: true
+            mode: preserve
+          tags: skip_ansible_lint

@@ -10,7 +10,6 @@ platforms:
   # On "${name:-${image:-debian}", the last brace does not miss, it works like that...
   # The env var should be used when the image variable refers to a full registry path like registry.access.redhat.com/ubi8/ubi
   - &default
-    # name: node1
     name: claranet-patroni-node1-${image:-debian}-${tag:-latest}-${scenario:-default}
     image: ${image:-debian}:${tag:-latest}
     privileged: true
@@ -33,7 +32,6 @@ platforms:
 
   - <<: *default
     name: claranet-patroni-node2-${image:-debian}-${tag:-latest}-${scenario:-default}
-    # name: claranet-patroni-node2-${image:-debian}-${tag:-latest}-${scenario:-default}-${patroni_version}
 
   # - <<: *default
   #   name: claranet-patroni-node3-${image:-debian}-${tag:-latest}-${scenario:-default}-${patroni_version}
@@ -70,7 +68,7 @@ provisioner:
         patroni_config_change_allow_restart: true
 
         patroni_dcs_postgresql_parameters:
-          - {option: "max_connections", value: 40 0}
+          - {option: "max_connections", value: 400}
           - {option: "wal_keep_segments", value: 10}
           - {option: "max_wal_senders", value: 11}
 
