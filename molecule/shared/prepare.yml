@@ -30,41 +30,14 @@
     #   ansible.builtin.package:
     #     name: "{{ ansible_os_family | lower == 'redhat' | ternary('bind-utils', 'dnsutils') }}"
 
+    # - name: Ensure /etc/resolv.conf is a regular file
+    #   block:
     - name: Copy original resolvconf
       ansible.builtin.copy:
         src: /etc/resolv.conf
         dest: /etc/resolv.conf.pre_molecule_run
         mode: preserve
         remote_src: true
-
-    - name: Ensure /etc/resolv.conf is a regular file
-      block:
-        - name: Copy original resolvconf
-          ansible.builtin.copy:
-            src: /etc/resolv.conf
-            dest: /etc/resolv.conf.pre_molecule_run
-            mode: preserve
-            remote_src: true
-
-        - name: Ensure resolvconf is unmounted
-          ansible.posix.mount:
-            path: /etc/resolv.conf
-            state: unmounted
-          register: resolvconf_unmount_res
-
-        # - name: Ensure /etc/resolv.conf doesnt exist before creating link
-        #   when: true or resolvconf_unmount_res is changed
-        #   ansible.builtin.file:
-        #     path: /etc/resolv.conf
-        #     state: absent
-
-        - name: Restore original /etc/resolv.conf
-          when: true
-          ansible.builtin.copy:
-            src: /etc/resolv.conf.pre_molecule_run
-            dest: /etc/resolv.conf
-            remote_src: true
-            mode: preserve
 
     - name: Debug
       ansible.builtin.debug:
@@ -84,44 +57,87 @@
           (ansible_distribution | lower == "ubuntu" and ansible_distribution_major_version is version("24", ">=")) or
           (ansible_distribution | lower == "redhat" and ansible_distribution_major_version is version("9", "<"))
 
-    - name: Ensure systemd-resolved is enabled and started
+    # Not working cause if installation is done right now the /etc/resolv.conf points to /run/systemd/resolve/stub-resolv.conf which doesnt exist yet
+    # - name: cat /etc/resolv.conf
+    #   ansible.builtin.shell:
+    #     cmd: |
+    #       cat /etc/resolv.conf && cat /run/systemd/resolve/resolv.conf
+    #   args:
+    #     executable: /bin/bash
+
+    - name: Ensure resolvconf is unmounted
+      ansible.posix.mount:
+        path: /etc/resolv.conf
+        state: unmounted
+      register: resolvconf_unmount_res
+
+    - name: Ensure systemd-resolved is stopped before hijacking resolv.conf
       # when: resolved_install_res is skipped
-      failed_when: false
+      # failed_when: false
       ansible.builtin.systemd:
         name: systemd-resolved
-        state: started
+        state: stopped
         enabled: true
         daemon_reload: true
 
-    - name: Link systemd-resolved to /etc/resolv.conf
-      when: true
+    - name: Restore original /etc/resolv.conf as a a regular file
+      block:
+        - name: Ensure /etc/resolv.conf doesnt exist
+          ansible.builtin.file:
+            path: /etc/resolv.conf
+            state: absent
+
+        - name: Restore original /etc/resolv.conf
+          when: true
+          ansible.builtin.copy:
+            src: /etc/resolv.conf.pre_molecule_run
+            dest: /etc/resolv.conf
+            remote_src: true
+            mode: preserve
+
+    - name: Ensure systemd-resolved is enabled and started
+      # when: resolved_install_res is skipped
+      ansible.builtin.systemd:
+        name: systemd-resolved
+        state: restarted
+        enabled: true
+        daemon_reload: true
+
+    - name: cat /etc/resolv.conf
+      ansible.builtin.shell:
+        cmd: |
+          cat /etc/resolv.conf && cat /run/systemd/resolve/resolv.conf
+      args:
+        executable: /bin/bash
+
+    - name: Use systemd-resolved 's resolv.conf
       ansible.builtin.file:
         src: /run/systemd/resolve/resolv.conf
         dest: /etc/resolv.conf
         state: link
         force: true
 
-    - name: Make /etc/resolv.conf be a regular file
-      when: false
-      block:
-        - name: Copy original resolvconf
-          ansible.builtin.copy:
-            src: /etc/resolv.conf
-            dest: /etc/resolv.conf.pre_molecule_run
-            mode: preserve
-            remote_src: true
+    # - name: Make /etc/resolv.conf be a regular file
+    #   when: false
+    #   block:
+    #     - name: Copy original resolvconf
+    #       ansible.builtin.copy:
+    #         src: /etc/resolv.conf
+    #         dest: /etc/resolv.conf.pre_molecule_run
+    #         mode: preserve
+    #         remote_src: true
 
-        - name: Ensure resolvconf is unmounted
-          ansible.posix.mount:
-            path: /etc/resolv.conf
-            state: unmounted
-          register: resolvconf_unmount_res
+    #     - name: Ensure resolvconf is unmounted
+    #       ansible.posix.mount:
+    #         path: /etc/resolv.conf
+    #         state: unmounted
+    #       register: resolvconf_unmount_res
 
-        - name: Restore original resolvconf
-          when: resolvconf_unmount_res is changed
-          ansible.builtin.copy:
-            src: /etc/resolv.conf.pre_molecule_run
-            dest: /etc/resolv.conf
-            remote_src: true
-            mode: preserve
-          tags: skip_ansible_lint
+    #     - name: Restore original resolvconf
+    #       when: resolvconf_unmount_res is changed
+    #       ansible.builtin.copy:
+    #         src: /etc/resolv.conf.pre_molecule_run
+    #         dest: /etc/resolv.conf
+    #         remote_src: true
+    #         mode: preserve
+    #       tags: skip_ansible_lint
