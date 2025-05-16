@@ -55,7 +55,7 @@
       register: resolved_install_res
       when: (ansible_distribution | lower == "debian" and ansible_distribution_major_version is version("12", ">=")) or
           (ansible_distribution | lower == "ubuntu" and ansible_distribution_major_version is version("24", ">=")) or
-          (ansible_distribution | lower == "redhat" and ansible_distribution_major_version is version("9", "<"))
+          (ansible_os_family | lower == "redhat" and ansible_distribution_major_version is version("9", ">="))
 
     # Not working cause if installation is done right now the /etc/resolv.conf points to /run/systemd/resolve/stub-resolv.conf which doesnt exist yet
     # - name: cat /etc/resolv.conf
