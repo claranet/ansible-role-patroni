@@ -26,4 +26,5 @@ galaxy_info:
   namespace: claranet
   role_name: patroni
   author: claranet
-  dependencies: []
+
+dependencies: []
