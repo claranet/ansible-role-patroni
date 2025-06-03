@@ -28,13 +28,13 @@ platforms:
       - patroni_servers
     cgroupns_mode: host
     networks:
-      - name: claranet-patroni-${name:-${image:-debian}-${tag:-latest}-${scenario:-default}-${patroni_version}
+      - name: claranet-patroni-${name:-${image:-debian}-${tag:-latest}-${scenario:-default}
 
   - <<: *default
     name: claranet-patroni-node2-${name:-${image:-debian}-${tag:-latest}-${scenario:-default}
 
-  # - <<: *default
-  #   name: claranet-patroni-node3-${name:-${image:-debian}-${tag:-latest}-${scenario:-default}-${patroni_version}
+  - <<: *default
+    name: claranet-patroni-node3-${name:-${image:-debian}-${tag:-latest}-${scenario:-default}
 
 provisioner:
   name: ansible
