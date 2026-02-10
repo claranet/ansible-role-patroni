@@ -159,15 +159,22 @@
           }}"
 
     - name: Reboot standbys first then the primary (API)
-      delegate_to: "{{ item }}"
+      when:
+        - patroni_config_change_allow_restart | d(false)
+        - patroni_inventory_hosts_pending_restart | length > 0
+          or _patroni_config_shmem_param_increase
+          or _patroni_config_shmem_param_decrease
+        - _play_nodes_reordered is defined
+        - _play_nodes_reordered | length > 0
       changed_when: true
       ansible.builtin.uri:
-        url: "http://{{ _patroni_restapi_hostwport }}/restart"
+        url: "http://{{ hostvars[patroni_restart_node].ansible_host }}:{{ patroni_restapi_port }}/restart"
         method: POST
         body:
           restart_pending: true
         body_format: json
       register: _patroni_reg
-      loop: "{{ _play_nodes_reordered }}"
+      loop: "{{ _play_nodes_reordered | default([]) }}"
       loop_control:
+        loop_var: patroni_restart_node
         pause: "{{ _patroni_reboot_loop_pause }}"
