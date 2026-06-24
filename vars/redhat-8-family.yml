@@ -19,6 +19,7 @@ patroni_pip_install_pkg_prerequisites:
 patroni_dcs_packages:
   consul: [patroni-consul]
   etcd: [patroni-etcd]
+  etcd3: [patroni-etcd]
 
 patroni_system_packages: "{{
     ['patroni' ~ ('-' ~ patroni_version if patroni_version | d('') | length > 0 else '')]
