@@ -572,6 +572,22 @@ patroni_etcd_cert: ""
 patroni_etcd_key: ""
 ```
 
+[ETCDV3](https://patroni.readthedocs.io/en/latest/yaml_configuration.html#etcdv3)
+```yaml
+patroni_etcd3_host: ""
+patroni_etcd3_hosts: 127.0.0.1:2379
+patroni_etcd3_use_proxies: false
+patroni_etcd3_url: ""
+patroni_etcd3_proxy: ""
+patroni_etcd3_srv: ""
+patroni_etcd3_protocol: http
+patroni_etcd3_username: ""
+patroni_etcd3_password: ""
+patroni_etcd3_cacert: ""
+patroni_etcd3_cert: ""
+patroni_etcd3_key: ""
+```
+
 [ZOOKEEPER](https://patroni.readthedocs.io/en/latest/yaml_configuration.html#zookeeper)
 ```yaml
 patroni_zookeeper_hosts: 127.0.0.1:2181
