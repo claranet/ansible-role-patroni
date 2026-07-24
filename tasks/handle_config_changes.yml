@@ -168,6 +168,6 @@
           restart_pending: true
         body_format: json
       register: _patroni_reg
-      loop: "{{ _play_nodes_reordered }}"
+      loop: "{{ _play_nodes_reordered | d([]) }}"
       loop_control:
         pause: "{{ _patroni_reboot_loop_pause }}"
