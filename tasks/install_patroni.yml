@@ -24,6 +24,7 @@
         virtualenv_command: python{{ _patroni_python_version }} -m venv
       when: not ansible_check_mode
       environment: "{{ _patroni_general_proxy_env }}"
+      become_user: "{{ patroni_system_user }}"
 
     # Errors while installing this dependency on redhat system. Used the link below to provide a solution
     # https://bobcares.com/blog/error-pg_config-executable-not-found/
@@ -34,6 +35,7 @@
         virtualenv: "{{ patroni_venv_install_dir }}"
         extra_args: "--only-binary :{{ _patroni_psycopg_pip_package }}:"
       environment: "{{ _patroni_general_proxy_env }}"
+      become_user: "{{ patroni_system_user }}"
 
 - name: Install patroni from system packages
   when: not patroni_install_from_pip
