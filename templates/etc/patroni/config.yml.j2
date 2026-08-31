@@ -126,7 +126,7 @@ postgresql:
 {% if patroni_postgresql_pg_hba |d([], true) |length > 0 %}
   pg_hba:
   {% for client in patroni_postgresql_pg_hba %}
-    - {{ client.type }} {{ client.database }} {{ client.user }} {{ client.address |d(None) }} {{ client.method }} {{ client.options |d(None) }}
+    - {{ client.type }} {{ client.database }} {{ client.user }}{{ ' ' + client.address if client.address is defined else '' }} {{ client.method }}{{ ' ' + client.options if client.options is defined else '' }}
   {% endfor %}
 {% endif %}
 {% if patroni_postgresql_pg_ident |d([], true) |length > 0 %}
